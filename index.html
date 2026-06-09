@@ -51,6 +51,14 @@
     font-size: 13px; font-weight: 600; cursor: pointer; transition: .15s; white-space: nowrap;
   }
   .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-action {
+    width: 100%; margin-top: 6px; padding: 11px; border-radius: 10px;
+    background: var(--accent); border: 1px solid var(--accent); color: #fff;
+    font-size: 14px; font-weight: 600; cursor: pointer; transition: .15s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn-action:hover { filter: brightness(1.08); }
+  .btn-action:active { transform: translateY(1px); }
   header h1 { margin: 0; font-size: 20px; letter-spacing: .2px; }
   header p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
   header a { color: var(--accent); text-decoration: none; }
@@ -211,6 +219,9 @@
       <input type="checkbox" id="allowPartial" />
       Show partial dies at the edge
     </label>
+
+    <div class="section-title">Export</div>
+    <button class="btn-action" id="savePng" type="button">⬇ Save figure as PNG</button>
   </div>
 
   <!-- ================= STAGE ================= -->
@@ -267,6 +278,32 @@ $("themeToggle").addEventListener("click", () => {
   const light = document.body.classList.toggle("light");
   $("themeToggle").textContent = light ? "🌙 Dark" : "☀ Light";
   recompute();
+});
+
+// Export figure as PNG
+$("savePng").addEventListener("click", () => {
+  // Composite onto an opaque background matching the current theme
+  const light = document.body.classList.contains("light");
+  const bg = light ? "#ffffff" : "#0e1116";
+  const out = document.createElement("canvas");
+  out.width = cv.width;
+  out.height = cv.height;
+  const octx = out.getContext("2d");
+  octx.fillStyle = bg;
+  octx.fillRect(0, 0, out.width, out.height);
+  octx.drawImage(cv, 0, 0);
+
+  // Build a descriptive filename from current inputs
+  let tag;
+  if (mode === "wafer") tag = "wafer_" + (parseFloat($("diameter").value) || 0) + "mm";
+  else tag = "panel_" + (parseFloat($("panelW").value) || 0) + "x" + (parseFloat($("panelH").value) || 0);
+  const die = (parseFloat($("dieW").value) || 0) + "x" + (parseFloat($("dieH").value) || 0);
+  const fname = "dpw_" + tag + "_die" + die + ".png";
+
+  const a = document.createElement("a");
+  a.download = fname;
+  a.href = out.toDataURL("image/png");
+  a.click();
 });
 
 // Presets
