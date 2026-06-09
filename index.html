@@ -17,19 +17,40 @@
     --partial: #d29922;
     --bad: #f85149;
     --shadow: 0 8px 24px rgba(0,0,0,.35);
+    --bg-grad: radial-gradient(1200px 800px at 70% -10%, #1a2230 0%, var(--bg) 55%);
+  }
+  body.light {
+    --bg: #ffffff;
+    --panel: #f6f8fa;
+    --panel-2: #ffffff;
+    --line: #d6dde5;
+    --text: #1b232c;
+    --muted: #5b6b7a;
+    --accent: #1f6feb;
+    --good: #2ea043;
+    --partial: #bf8700;
+    --shadow: 0 8px 24px rgba(70,90,120,.12);
+    --bg-grad: radial-gradient(1200px 800px at 70% -10%, #eef3f9 0%, var(--bg) 55%);
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: radial-gradient(1200px 800px at 70% -10%, #1a2230 0%, var(--bg) 55%);
+    background: var(--bg-grad);
     color: var(--text);
     -webkit-font-smoothing: antialiased;
   }
   header {
     padding: 20px 28px 14px;
     border-bottom: 1px solid var(--line);
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
   }
+  .theme-toggle {
+    flex-shrink: 0; margin-top: 2px; padding: 8px 14px; border-radius: 9px;
+    background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    font-size: 13px; font-weight: 600; cursor: pointer; transition: .15s; white-space: nowrap;
+  }
+  .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
   header h1 { margin: 0; font-size: 20px; letter-spacing: .2px; }
   header p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
   header a { color: var(--accent); text-decoration: none; }
@@ -107,8 +128,11 @@
 </head>
 <body>
 <header>
-  <h1>Die per Wafer / Panel Calculator</h1>
-  <p>Places dies on a real grid to compute count, area utilization and visualize the layout.</p>
+  <div>
+    <h1>Die per Wafer / Panel Calculator</h1>
+    <p>Places dies on a real grid to compute count, area utilization and visualize the layout.</p>
+  </div>
+  <button class="theme-toggle" id="themeToggle" type="button">☀ Light</button>
 </header>
 
 <div class="layout">
@@ -236,6 +260,13 @@ document.querySelectorAll(".tab").forEach(t => {
     $("panelOnly").style.display = mode === "panel" ? "" : "none";
     recompute();
   });
+});
+
+// Theme toggle
+$("themeToggle").addEventListener("click", () => {
+  const light = document.body.classList.toggle("light");
+  $("themeToggle").textContent = light ? "🌙 Dark" : "☀ Light";
+  recompute();
 });
 
 // Presets
@@ -408,6 +439,12 @@ function draw(res) {
   const X = mx => offPxX + (mx - b.x0) * scale;
   const Y = my => offPxY + (my - b.y0) * scale;
 
+  // theme-aware container colors
+  const light = document.body.classList.contains("light");
+  const bodyFill   = light ? "#e7edf4" : "#11161d";
+  const edgeStroke = light ? "#aab6c4" : "#3a4654";
+  const notchFill  = light ? "#cdd7e2" : "#0b0f14";
+
   // container outline
   ctx.lineWidth = 1.5;
   if (mode === "wafer") {
@@ -415,9 +452,9 @@ function draw(res) {
     // wafer body
     ctx.beginPath();
     ctx.arc(cxp, cyp, b.R*scale, 0, Math.PI*2);
-    ctx.fillStyle = "#11161d";
+    ctx.fillStyle = bodyFill;
     ctx.fill();
-    ctx.strokeStyle = "#3a4654";
+    ctx.strokeStyle = edgeStroke;
     ctx.stroke();
     // notch (flat) at bottom
     ctx.beginPath();
@@ -425,7 +462,7 @@ function draw(res) {
     ctx.lineTo(cxp + 14, cyp + b.R*scale);
     ctx.lineTo(cxp, cyp + b.R*scale - 12);
     ctx.closePath();
-    ctx.fillStyle = "#0b0f14";
+    ctx.fillStyle = notchFill;
     ctx.fill();
     // usable radius ring
     if (b.usableR > 0) {
@@ -437,9 +474,9 @@ function draw(res) {
       ctx.setLineDash([]);
     }
   } else {
-    ctx.fillStyle = "#11161d";
+    ctx.fillStyle = bodyFill;
     ctx.fillRect(X(b.x0), Y(b.y0), wMM*scale, hMM*scale);
-    ctx.strokeStyle = "#3a4654";
+    ctx.strokeStyle = edgeStroke;
     ctx.strokeRect(X(b.x0), Y(b.y0), wMM*scale, hMM*scale);
     // usable edge box
     ctx.strokeStyle = "rgba(76,154,255,.45)";
