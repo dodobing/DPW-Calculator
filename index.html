@@ -400,7 +400,17 @@ function layout() {
   // Base offset so a cell edge sits near center / region origin
   let baseX, baseY;
   if (mode === "wafer") { baseX = -dieW/2; baseY = -dieH/2; }
-  else { baseX = region.x0; baseY = region.y0; }
+  else {
+    // Center the die grid within the usable panel area
+    const usableW = region.x1 - region.x0;
+    const usableH = region.y1 - region.y0;
+    const nCols = Math.max(0, Math.floor((usableW + scribe) / pitchX));
+    const nRows = Math.max(0, Math.floor((usableH + scribe) / pitchY));
+    const occW = nCols > 0 ? nCols * pitchX - scribe : 0;
+    const occH = nRows > 0 ? nRows * pitchY - scribe : 0;
+    baseX = region.x0 + (usableW - occW) / 2;
+    baseY = region.y0 + (usableH - occH) / 2;
+  }
 
   let best = null;
   if (optimize) {
