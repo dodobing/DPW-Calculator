@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Die per Wafer / Panel Calculator</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #171c24;
+    --panel-2: #1f2630;
+    --line: #2a323d;
+    --text: #e6edf3;
+    --muted: #9aa7b4;
+    --accent: #4c9aff;
+    --good: #3fb950;
+    --partial: #d29922;
+    --bad: #f85149;
+    --shadow: 0 8px 24px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: radial-gradient(1200px 800px at 70% -10%, #1a2230 0%, var(--bg) 55%);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    padding: 20px 28px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  header h1 { margin: 0; font-size: 20px; letter-spacing: .2px; }
+  header p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+  header a { color: var(--accent); text-decoration: none; }
+  .layout {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 0;
+    height: calc(100vh - 78px);
+  }
+  @media (max-width: 880px) {
+    .layout { grid-template-columns: 1fr; height: auto; }
+  }
+  /* Controls */
+  .controls {
+    padding: 18px 22px 40px;
+    overflow-y: auto;
+    border-right: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(255,255,255,.015), transparent 120px);
+  }
+  .tabs { display: flex; gap: 8px; margin-bottom: 18px; }
+  .tab {
+    flex: 1; text-align: center; padding: 10px; border-radius: 10px;
+    background: var(--panel); border: 1px solid var(--line); cursor: pointer;
+    font-weight: 600; font-size: 14px; color: var(--muted); transition: .15s;
+  }
+  .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .field { margin-bottom: 14px; }
+  .field label {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 12.5px; color: var(--muted); margin-bottom: 6px;
+  }
+  .field label .unit { font-size: 11px; opacity: .7; }
+  .field input[type="number"] {
+    width: 100%; padding: 9px 11px; border-radius: 9px;
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    font-size: 14px; outline: none;
+  }
+  .field input[type="number"]:focus { border-color: var(--accent); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 16px; }
+  .presets button {
+    padding: 6px 10px; font-size: 12px; border-radius: 8px; cursor: pointer;
+    background: var(--panel); border: 1px solid var(--line); color: var(--muted);
+  }
+  .presets button:hover { border-color: var(--accent); color: var(--text); }
+  .check {
+    display: flex; align-items: center; gap: 9px; font-size: 13px;
+    color: var(--text); margin: 4px 0 16px; cursor: pointer; user-select: none;
+  }
+  .check input { width: 16px; height: 16px; accent-color: var(--accent); }
+  .section-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .8px;
+    color: var(--muted); margin: 18px 0 10px; opacity: .8;
+  }
+  /* Stage */
+  .stage { position: relative; display: flex; flex-direction: column; min-height: 0; }
+  .canvas-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; min-height: 360px; }
+  canvas { max-width: 100%; max-height: 100%; }
+  .stats {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+    padding: 0 24px 22px;
+  }
+  @media (max-width: 1100px){ .stats{ grid-template-columns: repeat(2,1fr);} }
+  .stat {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; box-shadow: var(--shadow);
+  }
+  .stat .k { font-size: 12px; color: var(--muted); }
+  .stat .v { font-size: 26px; font-weight: 700; margin-top: 4px; letter-spacing: .5px; }
+  .stat .v small { font-size: 13px; font-weight: 500; color: var(--muted); }
+  .legend { display: flex; gap: 18px; padding: 0 24px 12px; font-size: 12.5px; color: var(--muted); }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .accent { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Die per Wafer / Panel Calculator</h1>
+  <p>Places dies on a real grid to compute count, area utilization and visualize the layout.</p>
+</header>
+
+<div class="layout">
+  <!-- ================= CONTROLS ================= -->
+  <div class="controls">
+    <div class="tabs">
+      <div class="tab active" data-mode="wafer">Round Wafer</div>
+      <div class="tab" data-mode="panel">Rectangular Panel</div>
+    </div>
+
+    <!-- Wafer-only -->
+    <div id="waferOnly">
+      <div class="section-title">Wafer Size</div>
+      <div class="field">
+        <label>Diameter <span class="unit">mm</span></label>
+        <input type="number" id="diameter" value="300" min="1" step="1" />
+      </div>
+      <div class="presets" id="waferPresets">
+        <button data-d="100">100</button>
+        <button data-d="150">150</button>
+        <button data-d="200">200</button>
+        <button data-d="300">300</button>
+        <button data-d="450">450</button>
+      </div>
+    </div>
+
+    <!-- Panel-only -->
+    <div id="panelOnly" style="display:none">
+      <div class="section-title">Panel Size</div>
+      <div class="row2">
+        <div class="field">
+          <label>Width <span class="unit">mm</span></label>
+          <input type="number" id="panelW" value="510" min="1" step="1" />
+        </div>
+        <div class="field">
+          <label>Height <span class="unit">mm</span></label>
+          <input type="number" id="panelH" value="515" min="1" step="1" />
+        </div>
+      </div>
+      <div class="presets" id="panelPresets">
+        <button data-w="300" data-h="300">300×300</button>
+        <button data-w="510" data-h="515">510×515</button>
+        <button data-w="600" data-h="600">600×600</button>
+        <button data-w="620" data-h="750">620×750 (G5)</button>
+      </div>
+    </div>
+
+    <div class="section-title">Die Specification</div>
+    <div class="row2">
+      <div class="field">
+        <label>Die Width <span class="unit">mm</span></label>
+        <input type="number" id="dieW" value="10" min="0.01" step="0.1" />
+      </div>
+      <div class="field">
+        <label>Die Height <span class="unit">mm</span></label>
+        <input type="number" id="dieH" value="10" min="0.01" step="0.1" />
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Scribe / Dicing <span class="unit">mm</span></label>
+        <input type="number" id="scribe" value="0.1" min="0" step="0.05" />
+      </div>
+      <div class="field">
+        <label>Edge Exclusion <span class="unit">mm</span></label>
+        <input type="number" id="edge" value="3" min="0" step="0.5" />
+      </div>
+    </div>
+
+    <div class="section-title">Layout Options</div>
+    <label class="check">
+      <input type="checkbox" id="optimize" checked />
+      Auto-search best grid offset
+    </label>
+    <label class="check">
+      <input type="checkbox" id="allowPartial" checked />
+      Show partial dies at the edge
+    </label>
+  </div>
+
+  <!-- ================= STAGE ================= -->
+  <div class="stage">
+    <div class="canvas-wrap">
+      <canvas id="cv" width="640" height="640"></canvas>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--good)"></i> Good die (fully inside) <b id="legGood" style="color:var(--text)"></b></span>
+      <span><i style="background:var(--partial)"></i> Partial die <b id="legPartial" style="color:var(--text)"></b></span>
+    </div>
+    <div class="stats">
+      <div class="stat">
+        <div class="k">Good Die Count</div>
+        <div class="v accent" id="statCount">–</div>
+      </div>
+      <div class="stat">
+        <div class="k">Area Utilization</div>
+        <div class="v" id="statUtil">–<small>%</small></div>
+      </div>
+      <div class="stat">
+        <div class="k">Die Pitch (W × H)</div>
+        <div class="v" id="statPitch" style="font-size:18px">–</div>
+      </div>
+      <div class="stat">
+        <div class="k">Used Area / Total</div>
+        <div class="v" id="statArea" style="font-size:18px">–</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let mode = "wafer";
+
+const inputs = ["diameter","panelW","panelH","dieW","dieH","scribe","edge","optimize","allowPartial"];
+inputs.forEach(id => $(id).addEventListener("input", recompute));
+
+// Tab switching
+document.querySelectorAll(".tab").forEach(t => {
+  t.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+    t.classList.add("active");
+    mode = t.dataset.mode;
+    $("waferOnly").style.display = mode === "wafer" ? "" : "none";
+    $("panelOnly").style.display = mode === "panel" ? "" : "none";
+    recompute();
+  });
+});
+
+// Presets
+$("waferPresets").addEventListener("click", e => {
+  if (e.target.dataset.d) { $("diameter").value = e.target.dataset.d; recompute(); }
+});
+$("panelPresets").addEventListener("click", e => {
+  if (e.target.dataset.w) { $("panelW").value = e.target.dataset.w; $("panelH").value = e.target.dataset.h; recompute(); }
+});
+
+// ---- Core geometry ----
+// Returns { dies:[{x,y,w,h,full}], good, partial, pitchX, pitchY, bounds }
+function layout() {
+  const dieW = parseFloat($("dieW").value);
+  const dieH = parseFloat($("dieH").value);
+  const scribe = parseFloat($("scribe").value) || 0;
+  const edge = parseFloat($("edge").value) || 0;
+  const allowPartial = $("allowPartial").checked;
+  const optimize = $("optimize").checked;
+
+  if (!(dieW > 0) || !(dieH > 0)) return null;
+
+  const pitchX = dieW + scribe;
+  const pitchY = dieH + scribe;
+
+  let region; // function(testFn) — geometry container
+  let bounds; // {x0,y0,x1,y1} drawing extent in mm (full wafer/panel)
+
+  if (mode === "wafer") {
+    const D = parseFloat($("diameter").value);
+    if (!(D > 0)) return null;
+    const R = D / 2;
+    const usableR = R - edge;
+    bounds = { x0:-R, y0:-R, x1:R, y1:R, R, usableR, edge };
+    region = { type:"circle", usableR };
+  } else {
+    const W = parseFloat($("panelW").value);
+    const H = parseFloat($("panelH").value);
+    if (!(W > 0) || !(H > 0)) return null;
+    bounds = { x0:0, y0:0, x1:W, y1:H, W, H, edge };
+    region = { type:"rect", x0:edge, y0:edge, x1:W-edge, y1:H-edge };
+  }
+
+  // A die occupies the die area; scribe is "between" dies. We place die cells on a
+  // grid of pitch, and test the die (without scribe) against the usable region.
+  function dieInside(dx, dy) { // die rect [dx,dx+dieW]x[dy,dy+dieH]
+    if (region.type === "circle") {
+      const r = region.usableR;
+      if (r <= 0) return false;
+      // all 4 corners within radius
+      const corners = [[dx,dy],[dx+dieW,dy],[dx,dy+dieH],[dx+dieW,dy+dieH]];
+      return corners.every(([cx,cy]) => cx*cx + cy*cy <= r*r);
+    } else {
+      return dx >= region.x0 && dy >= region.y0 &&
+             dx+dieW <= region.x1 && dy+dieH <= region.y1;
+    }
+  }
+  function dieOverlaps(dx, dy) { // any part inside usable region
+    if (region.type === "circle") {
+      const r = region.usableR;
+      if (r <= 0) return false;
+      // closest point of rect to origin
+      const cx = Math.max(dx, Math.min(0, dx+dieW));
+      const cy = Math.max(dy, Math.min(0, dy+dieH));
+      return cx*cx + cy*cy < r*r;
+    } else {
+      return dx < region.x1 && dx+dieW > region.x0 &&
+             dy < region.y1 && dy+dieH > region.y0;
+    }
+  }
+
+  // grid extent
+  const span = mode === "wafer" ? bounds.R*2 : Math.max(bounds.W, bounds.H);
+  const nx = Math.ceil(span / pitchX) + 4;
+  const ny = Math.ceil(span / pitchY) + 4;
+
+  function build(offX, offY) {
+    const dies = [];
+    let good = 0, partial = 0;
+    for (let i = -nx; i <= nx; i++) {
+      for (let j = -ny; j <= ny; j++) {
+        const dx = offX + i * pitchX;
+        const dy = offY + j * pitchY;
+        const full = dieInside(dx, dy);
+        if (full) { dies.push({x:dx,y:dy,w:dieW,h:dieH,full:true}); good++; }
+        else if (allowPartial && dieOverlaps(dx, dy)) {
+          dies.push({x:dx,y:dy,w:dieW,h:dieH,full:false}); partial++;
+        }
+      }
+    }
+    return { dies, good, partial };
+  }
+
+  // Base offset so a cell edge sits near center / region origin
+  let baseX, baseY;
+  if (mode === "wafer") { baseX = -dieW/2; baseY = -dieH/2; }
+  else { baseX = region.x0; baseY = region.y0; }
+
+  let best = null;
+  if (optimize) {
+    const steps = 6;
+    for (let a = 0; a < steps; a++) {
+      for (let b = 0; b < steps; b++) {
+        const ox = baseX + (a/steps) * pitchX;
+        const oy = baseY + (b/steps) * pitchY;
+        const r = build(ox, oy);
+        if (!best || r.good > best.good) best = r;
+      }
+    }
+  } else {
+    best = build(baseX, baseY);
+  }
+
+  return { ...best, pitchX, pitchY, bounds, dieW, dieH };
+}
+
+// ---- Rendering ----
+const cv = $("cv");
+const ctx = cv.getContext("2d");
+
+function recompute() {
+  const res = layout();
+  if (!res) { clearStats(); return; }
+
+  // stats
+  $("statCount").textContent = res.good.toLocaleString();
+  $("legGood").textContent = res.good.toLocaleString();
+  $("legPartial").textContent = res.partial ? res.partial.toLocaleString() : "—";
+  const dieArea = res.dieW * res.dieH;
+  let totalArea;
+  if (mode === "wafer") totalArea = Math.PI * res.bounds.R * res.bounds.R;
+  else totalArea = res.bounds.W * res.bounds.H;
+  const util = (res.good * dieArea / totalArea) * 100;
+  $("statUtil").innerHTML = util.toFixed(1) + '<small>%</small>';
+  $("statPitch").textContent = res.pitchX.toFixed(2) + " × " + res.pitchY.toFixed(2) + " mm";
+  const usedArea = res.good * dieArea;
+  $("statArea").textContent = fmtArea(usedArea) + " / " + fmtArea(totalArea);
+
+  draw(res);
+}
+
+function fmtArea(mm2) {
+  if (mm2 >= 100) return (mm2/100).toFixed(1) + " cm²";
+  return mm2.toFixed(0) + " mm²";
+}
+function clearStats() {
+  ["statCount","statUtil","statPitch","statArea"].forEach(id => $(id).textContent = "–");
+  ctx.clearRect(0,0,cv.width,cv.height);
+}
+
+function draw(res) {
+  const b = res.bounds;
+  const wMM = b.x1 - b.x0, hMM = b.y1 - b.y0;
+
+  // hi-dpi
+  const dpr = window.devicePixelRatio || 1;
+  const cssSize = 600;
+  const pad = 24;
+  cv.style.width = cssSize + "px";
+  cv.style.height = cssSize + "px";
+  cv.width = cssSize * dpr;
+  cv.height = cssSize * dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cssSize,cssSize);
+
+  const scale = (cssSize - pad*2) / Math.max(wMM, hMM);
+  // map mm -> px (centered)
+  const offPxX = (cssSize - wMM*scale)/2;
+  const offPxY = (cssSize - hMM*scale)/2;
+  const X = mx => offPxX + (mx - b.x0) * scale;
+  const Y = my => offPxY + (my - b.y0) * scale;
+
+  // container outline
+  ctx.lineWidth = 1.5;
+  if (mode === "wafer") {
+    const cxp = X(0), cyp = Y(0);
+    // wafer body
+    ctx.beginPath();
+    ctx.arc(cxp, cyp, b.R*scale, 0, Math.PI*2);
+    ctx.fillStyle = "#11161d";
+    ctx.fill();
+    ctx.strokeStyle = "#3a4654";
+    ctx.stroke();
+    // notch (flat) at bottom
+    ctx.beginPath();
+    ctx.moveTo(cxp - 14, cyp + b.R*scale);
+    ctx.lineTo(cxp + 14, cyp + b.R*scale);
+    ctx.lineTo(cxp, cyp + b.R*scale - 12);
+    ctx.closePath();
+    ctx.fillStyle = "#0b0f14";
+    ctx.fill();
+    // usable radius ring
+    if (b.usableR > 0) {
+      ctx.beginPath();
+      ctx.arc(cxp, cyp, b.usableR*scale, 0, Math.PI*2);
+      ctx.strokeStyle = "rgba(76,154,255,.45)";
+      ctx.setLineDash([5,4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  } else {
+    ctx.fillStyle = "#11161d";
+    ctx.fillRect(X(b.x0), Y(b.y0), wMM*scale, hMM*scale);
+    ctx.strokeStyle = "#3a4654";
+    ctx.strokeRect(X(b.x0), Y(b.y0), wMM*scale, hMM*scale);
+    // usable edge box
+    ctx.strokeStyle = "rgba(76,154,255,.45)";
+    ctx.setLineDash([5,4]);
+    ctx.strokeRect(X(b.x0+b.edge), Y(b.y0+b.edge), (wMM-2*b.edge)*scale, (hMM-2*b.edge)*scale);
+    ctx.setLineDash([]);
+  }
+
+  // dies
+  const gap = Math.min(1, Math.max(0, scale*0.04)); // tiny visual gap
+  for (const d of res.dies) {
+    const px = X(d.x), py = Y(d.y);
+    const pw = d.w*scale, ph = d.h*scale;
+    ctx.fillStyle = d.full ? "rgba(63,185,80,.85)" : "rgba(210,153,34,.8)";
+    ctx.fillRect(px+gap/2, py+gap/2, Math.max(0.5,pw-gap), Math.max(0.5,ph-gap));
+    if (pw > 6 && ph > 6) {
+      ctx.strokeStyle = "rgba(0,0,0,.35)";
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(px+gap/2, py+gap/2, pw-gap, ph-gap);
+    }
+  }
+}
+
+recompute();
+window.addEventListener("resize", recompute);
+</script>
+</body>
+</html>
